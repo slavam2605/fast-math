@@ -16,6 +16,7 @@ std::strong_ordering compare(const bint_t& a, const bint_t& b);
 void add_abs_inplace(bint_t& a, const bint_t& b, int b_limit = -1, int b_shift = 0);
 void sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit = -1);
 void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem);
+void div_abs_inplace(bint_t& a, uint64_t b, uint64_t& rem);
 void debug_print(const bint_t& a);
 
 #endif //BIG_INT_OPS_H

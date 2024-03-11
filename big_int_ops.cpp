@@ -109,11 +109,16 @@ void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
             continue;
         }
 
-        // Guess the minimum left bound
+        // Guess the bounds
         uint64_t left = b.data.size() < current.data.size()
-            ? current.data.back()
+            ? ((static_cast<__uint128_t>(current.data.back()) << 64) + current.data[current.data.size() - 2]) / (b.data.back() + 1)
             : current.data.back() / (b.data.back() + 1);
-        uint64_t right = std::numeric_limits<uint64_t>::max();
+
+        uint64_t right = b.data.size() < current.data.size()
+             ? ((static_cast<__uint128_t>(current.data.back()) << 64) + current.data[current.data.size() - 2] + 1) / b.data.back()
+             : (current.data.back() + 1) / b.data.back();
+
+        const uint64_t initial_right = right;
         while (right - left > 1) {
             const uint64_t middle = left + (right - left) / 2;
             bint_t guess = mul(b, bint_t(middle));
@@ -123,7 +128,7 @@ void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
                 right = middle;
             }
         }
-        if (right == std::numeric_limits<uint64_t>::max()) {
+        if (right > left && right == initial_right) {
             // Check if right bound fits
             bint_t guess = mul(b, bint_t(right));
             if (compare_abs(guess, current) <= 0) {
@@ -141,6 +146,55 @@ void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
     }
     while (current.data.size() > 1 && current.data.back() == 0) {
         current.data.pop_back();
+    }
+    rem = current;
+}
+
+// Optimized version for division by uint64_t
+void div_abs_inplace(bint_t& a, const uint64_t b, uint64_t& rem) {
+    if (a.data.size() == 1 && a.data[0] < b) {
+        rem = a.data[0];
+        a = bint_t(0ll);
+        return;
+    }
+
+    __uint128_t current = 0;
+    for (int i = a.data.size() - 1; i >= 0; i--) {
+        current = (current << 64) + a.data[i];
+        if (current < b) {
+            a.data[i] = 0ull;
+            continue;
+        }
+
+        // Guess the bounds
+        uint64_t left = current / (b + 1);
+        uint64_t right = (current + 1) / b;
+
+        const uint64_t initial_right = right;
+        while (right - left > 1) {
+            const uint64_t middle = left + (right - left) / 2;
+            const __uint128_t guess = static_cast<__uint128_t>(b) * middle;
+            if (guess <= current) {
+                left = middle;
+            } else {
+                right = middle;
+            }
+        }
+        if (right > left && right == initial_right) {
+            // Check if right bound fits
+            const __uint128_t guess = static_cast<__uint128_t>(b) * right;
+            if (guess <= current) {
+                current -= guess;
+                a.data[i] = right;
+                continue;
+            }
+        }
+        const __uint128_t guess = static_cast<__uint128_t>(b) * left;
+        current -= guess;
+        a.data[i] = left;
+    }
+    while (a.data.size() > 1 && a.data.back() == 0) {
+        a.data.pop_back();
     }
     rem = current;
 }

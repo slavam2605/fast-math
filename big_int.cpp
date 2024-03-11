@@ -38,16 +38,14 @@ bint_t bint_t::operator*(const bint_t& other) const {
 
 std::string bint_t::to_string() const {
     std::string result;
-    bint_t divisor(10000000000000000000ull);
     bint_t current = *this;
-    bint_t rem;
+    uint64_t rem;
     while (current.data.size() > 1 || current.data[0] != 0ull) { // while current != 0
+        constexpr uint64_t divisor = 10000000000000000000ull;
         div_abs_inplace(current, divisor, rem);
-        if (rem.data.size() > 1) throw std::exception();
-        uint64_t value = rem.data[0];
         for (int _ = 0; _ < 19; _++) {
-           result.push_back("0123456789"[value % 10]);
-            value /= 10;
+            result.push_back("0123456789"[rem % 10]);
+            rem /= 10;
         }
     }
     while (result.size() > 1 && result.back() == '0') {
