@@ -152,46 +152,11 @@ void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
 
 // Optimized version for division by uint64_t
 void div_abs_inplace(bint_t& a, const uint64_t b, uint64_t& rem) {
-    if (a.data.size() == 1 && a.data[0] < b) {
-        rem = a.data[0];
-        a = bint_t(0ll);
-        return;
-    }
-
     __uint128_t current = 0;
     for (int i = a.data.size() - 1; i >= 0; i--) {
         current = (current << 64) + a.data[i];
-        if (current < b) {
-            a.data[i] = 0ull;
-            continue;
-        }
-
-        // Guess the bounds
-        uint64_t left = current / (b + 1);
-        uint64_t right = (current + 1) / b;
-
-        const uint64_t initial_right = right;
-        while (right - left > 1) {
-            const uint64_t middle = left + (right - left) / 2;
-            const __uint128_t guess = static_cast<__uint128_t>(b) * middle;
-            if (guess <= current) {
-                left = middle;
-            } else {
-                right = middle;
-            }
-        }
-        if (right > left && right == initial_right) {
-            // Check if right bound fits
-            const __uint128_t guess = static_cast<__uint128_t>(b) * right;
-            if (guess <= current) {
-                current -= guess;
-                a.data[i] = right;
-                continue;
-            }
-        }
-        const __uint128_t guess = static_cast<__uint128_t>(b) * left;
-        current -= guess;
-        a.data[i] = left;
+        a.data[i] = current / b;
+        current %= b;
     }
     while (a.data.size() > 1 && a.data.back() == 0) {
         a.data.pop_back();
