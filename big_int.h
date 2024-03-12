@@ -25,6 +25,8 @@ struct bint_t {
     bint_t operator+(const bint_t& other) const;
     bint_t operator-(const bint_t& other) const;
     bint_t operator*(const bint_t& other) const;
+    bint_t operator/(const bint_t& other) const;
+    bint_t operator%(const bint_t& other) const;
 
     [[nodiscard]] std::string to_string() const;
 };

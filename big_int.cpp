@@ -45,6 +45,31 @@ bint_t bint_t::operator*(const bint_t& other) const {
     return karatsuba(*this, other);
 }
 
+bint_t bint_t::operator/(const bint_t& other) const {
+    bint_t a = *this;
+    bint_t rem;
+    div_abs_inplace(a, other, rem);
+    a.sign = this->sign ^ other.sign;
+    if (a.sign && rem != bint_t(0ll)) {
+        add_abs_inplace(a, bint_t(1ll));
+    }
+    return a;
+}
+
+bint_t bint_t::operator%(const bint_t& other) const {
+    bint_t a = *this;
+    bint_t rem;
+    div_abs_inplace(a, other, rem);
+    if (rem == bint_t(0ll)) return rem;
+    if (this->sign != other.sign) {
+        const bint_t r = rem;
+        rem = other;
+        sub_abs_inplace(rem, r);
+    }
+    rem.sign = other.sign;
+    return rem;
+}
+
 void small_to_string(const bint_t& a, std::string& buffer, int digits) {
     std::string result;
     bint_t current = a;
