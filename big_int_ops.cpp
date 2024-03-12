@@ -45,7 +45,7 @@ bint_t add_abs(const bint_t& a, const bint_t& b) {
 
 void sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit) {
     if (b_limit < 0) b_limit = b.data.size();
-    if (b_limit > a.data.size()) throw std::exception();
+    if (b_limit > a.data.size()) throw std::runtime_error("sub_abs_inplace: b_limit > a.data.size()");
     uint64_t carry = 0;
     for (int i = 0; i < a.data.size() || i < b_limit; i++) {
         uint64_t c = carry;
@@ -54,10 +54,8 @@ void sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit) {
         if (i < b_limit) carry |= __builtin_usubll_overflow(c, b.data[i], &c);
         a.data[i] = c;
     }
-    while (a.data.size() > 1 && a.data.back() == 0) {
-        a.data.pop_back();
-    }
-    if (carry > 0) throw std::exception();
+    if (carry > 0) throw std::runtime_error("sub_abs_inplace: carry > 0");
+    a.normalize();
 }
 
 bint_t sub_abs(const bint_t& a, const bint_t& b) {
@@ -93,14 +91,30 @@ bint_t mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     return result;
 }
 
-void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
+bint_t mul_abs(const bint_t& a, const uint64_t b) {
+    if (b == 0) return bint_t(0ll);
+
+    bint_t result;
+    result.data.reserve(a.data.size() + 1);
+    const __uint128_t factor = b;
+    uint64_t carry = 0;
+    for (int i = 0; i < a.data.size(); i++) {
+        const __uint128_t c = factor * a.data[i] + carry;
+        carry = c >> 64;
+        result.data.push_back(static_cast<uint64_t>(c));
+    }
+    if (carry > 0) result.data.push_back(carry);
+    return result;
+}
+
+void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
     if (compare_abs(a, b) < 0) {
         rem = a;
         a = bint_t(0ll);
         return;
     }
 
-    if (b.data.back() == 0) throw std::exception(); // no leading zeroes in divisor
+    if (b.data.back() == 0) throw std::runtime_error("div_abs_inplace_inner: leading zeroes in divisor");
     bint_t current;
     for (int i = a.data.size() - 1; i >= 0; i--) {
         current.data.insert(current.data.begin(), a.data[i]);
@@ -118,36 +132,59 @@ void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
              ? ((static_cast<__uint128_t>(current.data.back()) << 64) + current.data[current.data.size() - 2] + 1) / b.data.back()
              : (current.data.back() + 1) / b.data.back();
 
-        const uint64_t initial_right = right;
-        while (right - left > 1) {
-            const uint64_t middle = left + (right - left) / 2;
-            bint_t guess = mul(b, bint_t(middle));
-            if (compare_abs(guess, current) <= 0) {
-                left = middle;
-            } else {
-                right = middle;
-            }
-        }
-        if (right > left && right == initial_right) {
-            // Check if right bound fits
-            bint_t guess = mul(b, bint_t(right));
-            if (compare_abs(guess, current) <= 0) {
+        if (right - left > 2) throw std::runtime_error("right - left > 2: " + std::to_string(right - left));
+        for (int diff = right - left; diff >= 0; diff--) {
+            uint64_t value = left + diff;
+            bint_t guess = mul_abs(b, value);
+            if (value == left || compare_abs(guess, current) <= 0) {
                 sub_abs_inplace(current, guess);
-                a.data[i] = right;
-                continue;
+                a.data[i] = value;
+                break;
             }
         }
-        bint_t guess = mul(b, bint_t(left));
-        sub_abs_inplace(current, guess);
-        a.data[i] = left;
     }
-    while (a.data.size() > 1 && a.data.back() == 0) {
+    a.normalize();
+    current.normalize();
+    rem = current;
+}
+
+void shift_left_inplace(bint_t& a, int shift) {
+    if (shift >= 64) throw std::exception();
+    const uint64_t last = a.data.back() >> (64 - shift);
+    for (int i = a.data.size() - 1; i >= 0; i--) {
+        const uint64_t self = a.data[i] << shift;
+        const uint64_t next = i == 0 ? 0 : a.data[i - 1] >> (64 - shift);
+        a.data[i] = self | next;
+    }
+    if (last != 0) {
+        a.data.push_back(last);
+    }
+}
+
+void shift_right_inplace(bint_t& a, int shift) {
+    if (shift >= 64) throw std::exception();
+    for (int i = 0; i < a.data.size(); i++) {
+        const uint64_t self = a.data[i] >> shift;
+        const uint64_t prev = i == a.data.size() - 1 ? 0 : a.data[i + 1] << (64 - shift);
+        a.data[i] = self | prev;
+    }
+    if (a.data.back() == 0) {
         a.data.pop_back();
     }
-    while (current.data.size() > 1 && current.data.back() == 0) {
-        current.data.pop_back();
+}
+
+// Knuth's idea to shift left until highest digit of divisor is greater than 2^63
+void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
+    if (b.data.back() > 1ull << 63) {
+        return div_abs_inplace_inner(a, b, rem);
     }
-    rem = current;
+
+    bint_t new_b = b;
+    const int shift = std::countl_zero(new_b.data.back());
+    shift_left_inplace(new_b, shift);
+    shift_left_inplace(a, shift);
+    div_abs_inplace_inner(a, new_b, rem);
+    shift_right_inplace(rem, shift);
 }
 
 // Optimized version for division by uint64_t
@@ -162,6 +199,17 @@ void div_abs_inplace(bint_t& a, const uint64_t b, uint64_t& rem) {
         a.data.pop_back();
     }
     rem = current;
+}
+
+bint_t fast_pow(const bint_t& a, int n) {
+    bint_t result(1ll);
+    bint_t c = a;
+    while (n > 0) {
+        if (n % 2 == 1) result = mul(result, c);
+        n /= 2;
+        c = mul(c, c);
+    }
+    return result;
 }
 
 bint_t add(const bint_t& a, const bint_t& b) {

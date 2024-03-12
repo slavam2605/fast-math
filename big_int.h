@@ -17,6 +17,8 @@ struct bint_t {
     explicit bint_t(uint64_t value);
     explicit bint_t(int64_t value);
 
+    void normalize();
+
     bint_t& operator=(const bint_t& other) = default;
     std::strong_ordering operator<=>(const bint_t& other) const;
     bool operator==(const bint_t& other) const;

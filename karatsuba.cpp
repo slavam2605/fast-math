@@ -40,6 +40,7 @@ bint_t karatsuba(const bint_t& a, const bint_t& b, int a_limit, int b_limit) { /
     add_abs_inplace(z0, z1, -1, m);
     add_abs_inplace(z0, z2, -1, 2 * m);
     z0.sign = a.sign ^ b.sign;
+    z0.normalize();
 
     return z0;
 }
