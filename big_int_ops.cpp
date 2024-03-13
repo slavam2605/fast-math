@@ -48,13 +48,31 @@ void sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit) {
     if (b_limit > a.data.size()) throw std::runtime_error("sub_abs_inplace: b_limit > a.data.size()");
     uint64_t carry = 0;
     for (int i = 0; i < a.data.size() || i < b_limit; i++) {
-        uint64_t c = carry;
-        carry = 0;
-        carry |= __builtin_usubll_overflow(a.data[i], c, &c);
-        if (i < b_limit) carry |= __builtin_usubll_overflow(c, b.data[i], &c);
+        __uint128_t c = a.data[i];
+        c -= carry;
+        if (i < b_limit) c -= b.data[i];
+        carry = -static_cast<uint64_t>(c >> 64);
         a.data[i] = c;
     }
     if (carry > 0) throw std::runtime_error("sub_abs_inplace: carry > 0");
+    a.normalize();
+}
+
+// a = a - b * c
+void sub_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c) {
+    if (c == 0) return; // a - 0 == a
+
+    const __uint128_t factor = c;
+    uint64_t carry = 0;
+    for (int i = 0; i < a.data.size() || i < b.data.size(); i++) {
+        __uint128_t _mc = a.data[i];
+        _mc -= carry;
+        if (i < b.data.size()) _mc -= factor * b.data[i];
+        carry = -static_cast<uint64_t>(_mc >> 64);
+        a.data[i] = static_cast<uint64_t>(_mc);
+    }
+
+    if (carry > 0) throw std::runtime_error("sub_mul_abs_uint64: carry > 0");
     a.normalize();
 }
 
@@ -104,8 +122,8 @@ bint_t mul_abs_uint64(const bint_t& a, const uint64_t b) {
     result.data.reserve(a.data.size() + 1);
     const __uint128_t factor = b;
     uint64_t carry = 0;
-    for (int i = 0; i < a.data.size(); i++) {
-        const __uint128_t c = factor * a.data[i] + carry;
+    for (const auto& element: a.data) {
+        const __uint128_t c = factor * element + carry;
         carry = c >> 64;
         result.data.push_back(static_cast<uint64_t>(c));
     }
@@ -130,23 +148,24 @@ void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
         }
 
         // Guess the bounds
-        uint64_t left = b.data.size() < current.data.size()
-            ? ((static_cast<__uint128_t>(current.data.back()) << 64) + current.data[current.data.size() - 2]) / (b.data.back() + 1)
-            : current.data.back() / (b.data.back() + 1);
-
-        uint64_t right = b.data.size() < current.data.size()
-             ? ((static_cast<__uint128_t>(current.data.back()) << 64) + current.data[current.data.size() - 2] + 1) / b.data.back()
-             : (current.data.back() + 1) / b.data.back();
+        uint64_t left;
+        uint64_t right;
+        if (b.data.size() < current.data.size()) {
+            const __uint128_t current_part = (static_cast<__uint128_t>(current.data.back()) << 64) + current.data[current.data.size() - 2];
+            left = current_part / (b.data.back() + 1);
+            right = (current_part + 1) / b.data.back();
+        } else {
+            left = current.data.back() / (b.data.back() + 1);
+            right = (current.data.back() + 1) / b.data.back();
+        }
 
         if (right - left > 2) throw std::runtime_error("right - left > 2: " + std::to_string(right - left));
-        for (int diff = right - left; diff >= 0; diff--) {
-            uint64_t value = left + diff;
-            bint_t guess = mul_abs_uint64(b, value);
-            if (value == left || compare_abs(guess, current) <= 0) {
-                sub_abs_inplace(current, guess);
-                a.data[i] = value;
-                break;
-            }
+        sub_mul_abs_uint64(current, b, left);
+        a.data[i] = left;
+        for (int diff = 0; diff <= right - left; diff++) {
+            if (diff == right - left || compare_abs(current, b) < 0) break;
+            sub_abs_inplace(current, b);
+            a.data[i]++;
         }
     }
     a.normalize();
