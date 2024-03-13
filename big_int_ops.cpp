@@ -72,21 +72,27 @@ bint_t sub_abs(const bint_t& a, const bint_t& b) {
 
 bint_t slow_mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     bint_t result(0ull);
-    bint_t temp_result;
     for (int i = 0; i < b_limit; i++) {
         const __uint128_t factor = b.data[i];
         if (factor == 0)
             continue;
 
         uint64_t carry = 0;
-        for (int j = 0; j < a_limit; j++) {
-            const __uint128_t c = factor * a.data[j] + carry;
+        for (int j = 0; j < a_limit + i; j++) {
+            __uint128_t c = carry;
+            if (j - i >= 0 && j - i < a_limit) c += factor * a.data[j - i];
+            if (j < result.data.size()) c += result.data[j];
             carry = c >> 64;
-            temp_result.data.push_back(static_cast<uint64_t>(c));
+            if (j < result.data.size()) {
+                result.data[j] = static_cast<uint64_t>(c);
+            } else {
+                result.data.push_back(static_cast<uint64_t>(c));
+            }
         }
-        if (carry > 0) temp_result.data.push_back(carry);
-        add_abs_inplace(result, temp_result, -1, i);
-        temp_result.data.clear();
+        if (carry > 0) {
+            if (result.data.size() != a_limit + i) throw std::runtime_error("slow_mul_abs: unexpected result.data size");
+            result.data.push_back(carry);
+        }
     }
     return result;
 }
