@@ -23,7 +23,7 @@ bint_t karatsuba(const bint_t& a, const bint_t& b, int a_limit, int b_limit) { /
     if (b_limit < 0) b_limit = b.data.size();
 
     if (a_limit <= SPLIT_LIMIT && b_limit <= SPLIT_LIMIT || a_limit <= 1 || b_limit <= 1)
-        return mul(a, b, a_limit, b_limit);
+        return slow_mul(a, b, a_limit, b_limit);
 
     int m = std::max(a_limit, b_limit) / 2;
     auto [a1, a0_limit] = split_abs(a, m, a_limit);

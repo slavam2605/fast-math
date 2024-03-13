@@ -70,6 +70,16 @@ bint_t bint_t::operator%(const bint_t& other) const {
     return rem;
 }
 
+bint_t& bint_t::operator<<=(const int n) {
+    shift_left_inplace(*this, n);
+    return *this;
+}
+
+bint_t& bint_t::operator>>=(int n) {
+    shift_right_inplace(*this, n);
+    return *this;
+}
+
 void small_to_string(const bint_t& a, std::string& buffer, int digits) {
     std::string result;
     bint_t current = a;
@@ -100,7 +110,8 @@ void to_string(const bint_t& a, std::string& buffer, int digits) { // NOLINT(*-n
         return small_to_string(a, buffer, digits);
 
     const int half_length10 = static_cast<int>(a.data.size() * 32 / std::log2(10.0));
-    const bint_t big10 = fast_pow(bint_t(10ll), half_length10);
+    bint_t big10(10ll);
+    fast_pow_inplace(big10, half_length10);
 
     bint_t high = a;
     bint_t low;

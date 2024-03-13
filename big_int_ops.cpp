@@ -70,7 +70,7 @@ bint_t sub_abs(const bint_t& a, const bint_t& b) {
     return copy;
 }
 
-bint_t mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
+bint_t slow_mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     bint_t result(0ull);
     bint_t temp_result;
     for (int i = 0; i < b_limit; i++) {
@@ -91,7 +91,7 @@ bint_t mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     return result;
 }
 
-bint_t mul_abs(const bint_t& a, const uint64_t b) {
+bint_t mul_abs_uint64(const bint_t& a, const uint64_t b) {
     if (b == 0) return bint_t(0ll);
 
     bint_t result;
@@ -135,7 +135,7 @@ void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
         if (right - left > 2) throw std::runtime_error("right - left > 2: " + std::to_string(right - left));
         for (int diff = right - left; diff >= 0; diff--) {
             uint64_t value = left + diff;
-            bint_t guess = mul_abs(b, value);
+            bint_t guess = mul_abs_uint64(b, value);
             if (value == left || compare_abs(guess, current) <= 0) {
                 sub_abs_inplace(current, guess);
                 a.data[i] = value;
@@ -148,7 +148,7 @@ void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
     rem = current;
 }
 
-void shift_left_inplace(bint_t& a, int shift) {
+void shift_left_inplace(bint_t& a, const int shift) {
     if (shift >= 64) throw std::exception();
     const uint64_t last = a.data.back() >> (64 - shift);
     for (int i = a.data.size() - 1; i >= 0; i--) {
@@ -161,7 +161,7 @@ void shift_left_inplace(bint_t& a, int shift) {
     }
 }
 
-void shift_right_inplace(bint_t& a, int shift) {
+void shift_right_inplace(bint_t& a, const int shift) {
     if (shift >= 64) throw std::exception();
     for (int i = 0; i < a.data.size(); i++) {
         const uint64_t self = a.data[i] >> shift;
@@ -201,15 +201,28 @@ void div_abs_inplace(bint_t& a, const uint64_t b, uint64_t& rem) {
     rem = current;
 }
 
-bint_t fast_pow(const bint_t& a, int n) {
-    bint_t result(1ll);
+void fast_pow_inplace(bint_t& a, uint64_t n) {
+    if (n == 0) {
+        a = bint_t(1ll);
+        return;
+    }
+
+    // n is power of 2
+    if ((n & (n - 1)) == 0) {
+        while (n > 1) {
+            a = karatsuba(a, a);
+            n >>= 1;
+        }
+        return;
+    }
+
+    n--;
     bint_t c = a;
     while (n > 0) {
-        if (n % 2 == 1) result = mul(result, c);
+        if (n % 2 == 1) a = karatsuba(a, c);
         n /= 2;
-        c = mul(c, c);
+        c = karatsuba(c, c);
     }
-    return result;
 }
 
 bint_t add(const bint_t& a, const bint_t& b) {
@@ -234,11 +247,12 @@ bint_t sub(const bint_t& a, const bint_t& b) {
     return sub_abs(a, b);
 }
 
-bint_t mul(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
+bint_t slow_mul(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     if (a_limit < 0) a_limit = a.data.size();
     if (b_limit < 0) b_limit = b.data.size();
-    auto result = mul_abs(a, b, a_limit, b_limit);
+    auto result = slow_mul_abs(a, b, a_limit, b_limit);
     result.sign = a.sign ^ b.sign;
+    result.normalize();
     return result;
 }
 

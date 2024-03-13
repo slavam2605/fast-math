@@ -28,6 +28,9 @@ struct bint_t {
     bint_t operator/(const bint_t& other) const;
     bint_t operator%(const bint_t& other) const;
 
+    bint_t& operator<<=(int n);
+    bint_t& operator>>=(int n);
+
     [[nodiscard]] std::string to_string() const;
 };
 
