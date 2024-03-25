@@ -84,6 +84,9 @@ void small_to_string(const bint_t& a, std::string& buffer, int digits) {
     std::string result;
     bint_t current = a;
     uint64_t rem;
+    if (current.data.empty() || current.data.size() == 1 && current.data[0] == 0ull) { // if current == 0
+        result.push_back('0');
+    }
     while (current.data.size() > 1 || (!current.data.empty() && current.data[0] != 0ull)) { // while current != 0
         constexpr uint64_t divisor = 10000000000000000000ull;
         div_abs_inplace(current, divisor, rem);
@@ -96,7 +99,10 @@ void small_to_string(const bint_t& a, std::string& buffer, int digits) {
         result.pop_back();
     }
     if (digits > 0) {
-        if (result.size() > digits) throw std::runtime_error("small_to_string: result.size() > digits");
+        if (result.size() > digits) {
+            throw std::runtime_error("small_to_string: result.size()[" + std::to_string(result.size()) +
+                "] > digits[" + std::to_string(digits) + "]");
+        }
         for (int i = 0; i < digits - result.size(); i++) {
             buffer.push_back('0');
         }
