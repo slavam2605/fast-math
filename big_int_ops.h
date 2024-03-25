@@ -7,12 +7,16 @@
 
 #include "big_int.h"
 
+constexpr int KARATSUBA_THRESHOLD = 30;
+constexpr int TOOM_COOK_THRESHOLD = 100;
+
 bint_t add(const bint_t& a, const bint_t& b);
 bint_t sub(const bint_t& a, const bint_t& b);
-bint_t slow_mul(const bint_t& a, const bint_t& b, int a_limit = -1, int b_limit = -1);
+bint_t multiply(const bint_t& a, const bint_t& b);
 
 std::strong_ordering compare(const bint_t& a, const bint_t& b);
 
+bint_t slow_mul(const bint_t& a, const bint_t& b, int a_limit = -1, int b_limit = -1);
 void shift_left_inplace(bint_t& a, int shift);
 void shift_right_inplace(bint_t& a, int shift);
 void fast_pow_inplace(bint_t& a, uint64_t n);

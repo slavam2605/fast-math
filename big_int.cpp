@@ -42,7 +42,7 @@ bint_t bint_t::operator-(const bint_t& other) const {
 }
 
 bint_t bint_t::operator*(const bint_t& other) const {
-    return karatsuba(*this, other);
+    return multiply(*this, other);
 }
 
 bint_t bint_t::operator/(const bint_t& other) const {

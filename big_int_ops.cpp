@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "karatsuba.h"
+#include "toom_cook.h"
 
 std::strong_ordering compare_abs(const bint_t&a, const bint_t& b) {
     if (a.data.size() < b.data.size()) return std::strong_ordering::less;
@@ -84,6 +85,7 @@ bint_t sub_abs(const bint_t& a, const bint_t& b) {
     }
 
     bint_t copy = a;
+    copy.sign = false;
     sub_abs_inplace(copy, b);
     return copy;
 }
@@ -174,7 +176,8 @@ void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
 }
 
 void shift_left_inplace(bint_t& a, const int shift) {
-    if (shift >= 64) throw std::exception();
+    if (shift >= 64) throw std::runtime_error("shift_left_inplace: shift >= 64: " + std::to_string(shift));
+    if (shift == 0) return;
     const uint64_t last = a.data.back() >> (64 - shift);
     for (int i = a.data.size() - 1; i >= 0; i--) {
         const uint64_t self = a.data[i] << shift;
@@ -187,13 +190,14 @@ void shift_left_inplace(bint_t& a, const int shift) {
 }
 
 void shift_right_inplace(bint_t& a, const int shift) {
-    if (shift >= 64) throw std::exception();
+    if (shift >= 64) throw std::runtime_error("shift_right_inplace: shift >= 64: " + std::to_string(shift));
+    if (shift == 0) return;
     for (int i = 0; i < a.data.size(); i++) {
         const uint64_t self = a.data[i] >> shift;
         const uint64_t prev = i == a.data.size() - 1 ? 0 : a.data[i + 1] << (64 - shift);
         a.data[i] = self | prev;
     }
-    if (a.data.back() == 0) {
+    if (a.data.size() > 1 && a.data.back() == 0) {
         a.data.pop_back();
     }
 }
@@ -270,6 +274,16 @@ bint_t sub(const bint_t& a, const bint_t& b) {
     }
     if (a.sign) return sub_abs(b, a);
     return sub_abs(a, b);
+}
+
+bint_t multiply(const bint_t& a, const bint_t& b) {
+    if (a.data.size() < KARATSUBA_THRESHOLD || b.data.size() < KARATSUBA_THRESHOLD)
+        return slow_mul(a, b); // TODO check a.size == 1 || b.size == 1
+
+    if (a.data.size() < TOOM_COOK_THRESHOLD && b.data.size() < TOOM_COOK_THRESHOLD)
+        return karatsuba(a, b);
+
+    return toom3(a, b);
 }
 
 bint_t slow_mul(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {

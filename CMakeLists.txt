@@ -10,4 +10,6 @@ add_executable(fast_math main.cpp
         big_int_ops.h
         big_int_ops.cpp
         karatsuba.cpp
-        karatsuba.h)
+        karatsuba.h
+        toom_cook.cpp
+        toom_cook.h)
