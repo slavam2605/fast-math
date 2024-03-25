@@ -26,7 +26,7 @@ void bint_t::normalize() {
 }
 
 std::strong_ordering bint_t::operator<=>(const bint_t& other) const {
-    return compare(*this, other);
+    return big_int::compare(*this, other);
 }
 
 bool bint_t::operator==(const bint_t& other) const {
@@ -34,24 +34,24 @@ bool bint_t::operator==(const bint_t& other) const {
 }
 
 bint_t bint_t::operator+(const bint_t& other) const {
-    return add(*this, other);
+    return big_int::add(*this, other);
 }
 
 bint_t bint_t::operator-(const bint_t& other) const {
-    return sub(*this, other);
+    return big_int::sub(*this, other);
 }
 
 bint_t bint_t::operator*(const bint_t& other) const {
-    return multiply(*this, other);
+    return big_int::multiply(*this, other);
 }
 
 bint_t bint_t::operator/(const bint_t& other) const {
     bint_t a = *this;
     bint_t rem;
-    div_abs_inplace(a, other, rem);
+    big_int::div_abs_inplace(a, other, rem);
     a.sign = this->sign ^ other.sign;
     if (a.sign && rem != bint_t(0ll)) {
-        add_abs_inplace(a, bint_t(1ll));
+        big_int_impl::add_abs_inplace(a, bint_t(1ll));
     }
     return a;
 }
@@ -59,24 +59,24 @@ bint_t bint_t::operator/(const bint_t& other) const {
 bint_t bint_t::operator%(const bint_t& other) const {
     bint_t a = *this;
     bint_t rem;
-    div_abs_inplace(a, other, rem);
+    big_int::div_abs_inplace(a, other, rem);
     if (rem == bint_t(0ll)) return rem;
     if (this->sign != other.sign) {
         const bint_t r = rem;
         rem = other;
-        sub_abs_inplace(rem, r);
+        big_int_impl::sub_abs_inplace(rem, r);
     }
     rem.sign = other.sign;
     return rem;
 }
 
 bint_t& bint_t::operator<<=(const int n) {
-    shift_left_inplace(*this, n);
+    big_int::shift_left_inplace(*this, n);
     return *this;
 }
 
 bint_t& bint_t::operator>>=(int n) {
-    shift_right_inplace(*this, n);
+    big_int::shift_right_inplace(*this, n);
     return *this;
 }
 
@@ -89,7 +89,7 @@ void small_to_string(const bint_t& a, std::string& buffer, int digits) {
     }
     while (current.data.size() > 1 || (!current.data.empty() && current.data[0] != 0ull)) { // while current != 0
         constexpr uint64_t divisor = 10000000000000000000ull;
-        div_abs_inplace(current, divisor, rem);
+        big_int_impl::div_abs_inplace(current, divisor, rem);
         for (int _ = 0; _ < 19; _++) {
             result.push_back("0123456789"[rem % 10]);
             rem /= 10;
@@ -117,11 +117,11 @@ void to_string(const bint_t& a, std::string& buffer, int digits) { // NOLINT(*-n
 
     const int half_length10 = static_cast<int>(a.data.size() * 32 / std::log2(10.0));
     bint_t big10(10ll);
-    fast_pow_inplace(big10, half_length10);
+    big_int::fast_pow_inplace(big10, half_length10);
 
     bint_t high = a;
     bint_t low;
-    div_abs_inplace(high, big10, low);
+    big_int::div_abs_inplace(high, big10, low);
     to_string(high, buffer, digits - half_length10);
     to_string(low, buffer, half_length10);
 }

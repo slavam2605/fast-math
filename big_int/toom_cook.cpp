@@ -3,10 +3,11 @@
 //
 
 #include "toom_cook.h"
-
 #include <iostream>
-
 #include "big_int_ops.h"
+
+using namespace big_int;
+using namespace big_int_impl;
 
 std::tuple<bint_t, bint_t, bint_t> split_abs(const bint_t& a, int m) {
     if (a.data.size() <= m) {
@@ -56,14 +57,14 @@ bint_t toom3(const bint_t& a, const bint_t& b) {
     auto p_1 = p0 + a1;
     auto p_m1 = p0 - a1;
     auto p_m2 = p_m1 + a2;
-    shift_left_inplace(p_m2, 1);
+    p_m2 <<= 1;
     p_m2 = p_m2 - a0;
 
     auto q0 = b0 + b2;
     auto q_1 = q0 + b1;
     auto q_m1 = q0 - b1;
     auto q_m2 = q_m1 + b2;
-    shift_left_inplace(q_m2, 1);
+    q_m2 <<= 1;
     q_m2 = q_m2 - b0;
 
     auto r_0 = multiply(a0, b0);
@@ -76,12 +77,12 @@ bint_t toom3(const bint_t& a, const bint_t& b) {
     auto r3 = r_m2 - r_1;
     div_abs_inplace_3_assert_rem(r3);
     auto r1 = r_1 - r_m1;
-    shift_right_inplace(r1, 1);
+    r1 >>= 1;
     auto r2 = r_m1 - r_0;
     auto diff = r2 - r3;
     r3 = r2 - r3;
-    shift_right_inplace(r3, 1);
-    shift_left_inplace(r_inf, 1);
+    r3 >>= 1;
+    r_inf <<= 1;
     r3 = r3 + r_inf;
     r2 = r2 + r1 - r4;
     r1 = r1 - r3;

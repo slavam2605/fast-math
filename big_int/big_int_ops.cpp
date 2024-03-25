@@ -19,47 +19,9 @@ std::strong_ordering compare_abs(const bint_t&a, const bint_t& b) {
     return std::strong_ordering::equal;
 }
 
-void add_abs_inplace(bint_t& a, const bint_t& b, int b_limit, const int b_shift) {
-    if (b_limit < 0) b_limit = b.data.size();
-    uint64_t carry = 0;
-    for (int i = 0; i < a.data.size() || i - b_shift < b_limit; i++) {
-        uint64_t c = carry;
-        carry = 0;
-        if (i < a.data.size()) carry |= __builtin_uaddll_overflow(a.data[i], c, &c);
-        if (i >= b_shift && i - b_shift < b_limit) carry |= __builtin_uaddll_overflow(b.data[i - b_shift], c, &c);
-        if (i < a.data.size()) {
-            a.data[i] = c;
-        } else {
-            a.data.push_back(c);
-        }
-    }
-    if (carry > 0) {
-        a.data.push_back(carry);
-    }
-}
-
-bint_t add_abs(const bint_t& a, const bint_t& b) {
-    bint_t copy = a;
-    add_abs_inplace(copy, b);
-    return copy;
-}
-
-void sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit) {
-    if (b_limit < 0) b_limit = b.data.size();
-    if (b_limit > a.data.size()) throw std::runtime_error("sub_abs_inplace: b_limit > a.data.size()");
-    uint64_t carry = 0;
-    for (int i = 0; i < a.data.size() || i < b_limit; i++) {
-        __uint128_t c = a.data[i];
-        c -= carry;
-        if (i < b_limit) c -= b.data[i];
-        carry = -static_cast<uint64_t>(c >> 64);
-        a.data[i] = c;
-    }
-    if (carry > 0) throw std::runtime_error("sub_abs_inplace: carry > 0");
-    a.normalize();
-}
-
-// a = a - b * c
+/**
+ * Fast implementation for `a = a - b * c`
+ */
 void sub_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c) {
     if (c == 0) return; // a - 0 == a
 
@@ -77,20 +39,7 @@ void sub_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c) {
     a.normalize();
 }
 
-bint_t sub_abs(const bint_t& a, const bint_t& b) {
-    if (compare_abs(a, b) < 0) {
-        auto result = sub_abs(b, a);
-        result.sign = true;
-        return result;
-    }
-
-    bint_t copy = a;
-    copy.sign = false;
-    sub_abs_inplace(copy, b);
-    return copy;
-}
-
-bint_t slow_mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
+bint_t schoolbook_mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     bint_t result(0ull);
     for (int i = 0; i < b_limit; i++) {
         const __uint128_t factor = b.data[i];
@@ -117,7 +66,7 @@ bint_t slow_mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) 
     return result;
 }
 
-bint_t mul_abs_uint64(const bint_t& a, const uint64_t b) {
+bint_t mul_uint64(const bint_t& a, const uint64_t b, const bool new_sign) {
     if (b == 0) return bint_t(0ll);
 
     bint_t result;
@@ -130,6 +79,7 @@ bint_t mul_abs_uint64(const bint_t& a, const uint64_t b) {
         result.data.push_back(static_cast<uint64_t>(c));
     }
     if (carry > 0) result.data.push_back(carry);
+    result.sign = new_sign;
     return result;
 }
 
@@ -166,7 +116,7 @@ void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
         a.data[i] = left;
         for (int diff = 0; diff <= right - left; diff++) {
             if (diff == right - left || compare_abs(current, b) < 0) break;
-            sub_abs_inplace(current, b);
+            big_int_impl::sub_abs_inplace(current, b);
             a.data[i]++;
         }
     }
@@ -175,49 +125,65 @@ void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
     rem = current;
 }
 
-void shift_left_inplace(bint_t& a, const int shift) {
-    if (shift >= 64) throw std::runtime_error("shift_left_inplace: shift >= 64: " + std::to_string(shift));
-    if (shift == 0) return;
-    const uint64_t last = a.data.back() >> (64 - shift);
-    for (int i = a.data.size() - 1; i >= 0; i--) {
-        const uint64_t self = a.data[i] << shift;
-        const uint64_t next = i == 0 ? 0 : a.data[i - 1] >> (64 - shift);
-        a.data[i] = self | next;
+bint_t add_abs(const bint_t& a, const bint_t& b) {
+    bint_t copy = a;
+    big_int_impl::add_abs_inplace(copy, b);
+    return copy;
+}
+
+bint_t sub_abs(const bint_t& a, const bint_t& b) { // NOLINT(*-no-recursion)
+    if (compare_abs(a, b) < 0) {
+        auto result = sub_abs(b, a);
+        result.sign = true;
+        return result;
     }
-    if (last != 0) {
-        a.data.push_back(last);
+
+    bint_t copy = a;
+    copy.sign = false;
+    big_int_impl::sub_abs_inplace(copy, b);
+    return copy;
+}
+
+// ================ namespace big_int_impl ================
+
+void big_int_impl::add_abs_inplace(bint_t& a, const bint_t& b, int b_limit, const int b_shift) {
+    if (b_limit < 0) b_limit = b.data.size();
+    uint64_t carry = 0;
+    for (int i = 0; i < a.data.size() || i - b_shift < b_limit; i++) {
+        uint64_t c = carry;
+        carry = 0;
+        if (i < a.data.size()) carry |= __builtin_uaddll_overflow(a.data[i], c, &c);
+        if (i >= b_shift && i - b_shift < b_limit) carry |= __builtin_uaddll_overflow(b.data[i - b_shift], c, &c);
+        if (i < a.data.size()) {
+            a.data[i] = c;
+        } else {
+            a.data.push_back(c);
+        }
+    }
+    if (carry > 0) {
+        a.data.push_back(carry);
     }
 }
 
-void shift_right_inplace(bint_t& a, const int shift) {
-    if (shift >= 64) throw std::runtime_error("shift_right_inplace: shift >= 64: " + std::to_string(shift));
-    if (shift == 0) return;
-    for (int i = 0; i < a.data.size(); i++) {
-        const uint64_t self = a.data[i] >> shift;
-        const uint64_t prev = i == a.data.size() - 1 ? 0 : a.data[i + 1] << (64 - shift);
-        a.data[i] = self | prev;
+void big_int_impl::sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit) {
+    if (b_limit < 0) b_limit = b.data.size();
+    if (b_limit > a.data.size()) throw std::runtime_error("sub_abs_inplace: b_limit > a.data.size()");
+    uint64_t carry = 0;
+    for (int i = 0; i < a.data.size() || i < b_limit; i++) {
+        __uint128_t c = a.data[i];
+        c -= carry;
+        if (i < b_limit) c -= b.data[i];
+        carry = -static_cast<uint64_t>(c >> 64);
+        a.data[i] = c;
     }
-    if (a.data.size() > 1 && a.data.back() == 0) {
-        a.data.pop_back();
-    }
+    if (carry > 0) throw std::runtime_error("sub_abs_inplace: carry > 0");
+    a.normalize();
 }
 
-// Knuth's idea to shift left until highest digit of divisor is greater than 2^63
-void div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
-    if (b.data.back() > 1ull << 63) {
-        return div_abs_inplace_inner(a, b, rem);
-    }
-
-    bint_t new_b = b;
-    const int shift = std::countl_zero(new_b.data.back());
-    shift_left_inplace(new_b, shift);
-    shift_left_inplace(a, shift);
-    div_abs_inplace_inner(a, new_b, rem);
-    shift_right_inplace(rem, shift);
-}
-
-// Optimized version for division by uint64_t
-void div_abs_inplace(bint_t& a, const uint64_t b, uint64_t& rem) {
+/**
+ * Optimized version for division by uint64_t
+ */
+void big_int_impl::div_abs_inplace(bint_t& a, const uint64_t b, uint64_t& rem) {
     __uint128_t current = 0;
     for (int i = a.data.size() - 1; i >= 0; i--) {
         current = (current << 64) + a.data[i];
@@ -230,7 +196,82 @@ void div_abs_inplace(bint_t& a, const uint64_t b, uint64_t& rem) {
     rem = current;
 }
 
-void fast_pow_inplace(bint_t& a, uint64_t n) {
+bint_t big_int_impl::schoolbook_multiply(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
+    if (a_limit < 0) a_limit = a.data.size();
+    if (b_limit < 0) b_limit = b.data.size();
+    auto result = schoolbook_mul_abs(a, b, a_limit, b_limit);
+    result.sign = a.sign ^ b.sign;
+    result.normalize();
+    return result;
+}
+
+// ================ namespace big_int ================
+
+bint_t big_int::add(const bint_t& a, const bint_t& b) {
+    if (!a.sign && b.sign) return sub_abs(a, b);
+    if (a.sign && !b.sign) return sub_abs(b, a);
+    if (a.sign) { // => b.sign
+        auto result = add_abs(a, b);
+        result.sign = true;
+        return result;
+    }
+    return add_abs(a, b);
+}
+
+bint_t big_int::sub(const bint_t& a, const bint_t& b) {
+    if (!a.sign && b.sign) return add_abs(a, b);
+    if (a.sign && !b.sign) {
+        auto result = add_abs(a, b);
+        result.sign = true;
+        return result;
+    }
+    if (a.sign) return sub_abs(b, a);
+    return sub_abs(a, b);
+}
+
+bint_t big_int::multiply(const bint_t& a, const bint_t& b) {
+    if (a.data.size() < KARATSUBA_THRESHOLD || b.data.size() < KARATSUBA_THRESHOLD) {
+        if (a.data.size() == 1)
+            return mul_uint64(b, a.data[0], a.sign ^ b.sign);
+        if (b.data.size() == 1)
+            return mul_uint64(a, b.data[0], a.sign ^ b.sign);
+
+        return big_int_impl::schoolbook_multiply(a, b);
+    }
+
+    if (a.data.size() < TOOM_COOK_THRESHOLD && b.data.size() < TOOM_COOK_THRESHOLD)
+        return karatsuba(a, b);
+
+    return toom3(a, b);
+}
+
+/**
+ * Knuth's idea to shift left until highest digit of divisor is greater than 2^63
+ */
+void big_int::div_abs_inplace(bint_t& a, const bint_t& b, bint_t& rem) {
+    if (b.data.back() > 1ull << 63) {
+        return div_abs_inplace_inner(a, b, rem);
+    }
+
+    bint_t new_b = b;
+    const int shift = std::countl_zero(new_b.data.back());
+    new_b <<= shift;
+    a <<= shift;
+    div_abs_inplace_inner(a, new_b, rem);
+    rem >>= shift;
+}
+
+std::strong_ordering big_int::compare(const bint_t& a, const bint_t& b) {
+    if (a.sign && !b.sign) return std::strong_ordering::less;
+    if (!a.sign && b.sign) return std::strong_ordering::greater;
+    const auto result = compare_abs(a, b);
+    return a.sign ? 0 <=> result : result;
+}
+
+/**
+ * Fast power algorithm, uses O(log n) multiplications
+ */
+void big_int::fast_pow_inplace(bint_t& a, uint64_t n) {
     if (n == 0) {
         a = bint_t(1ll);
         return;
@@ -254,59 +295,29 @@ void fast_pow_inplace(bint_t& a, uint64_t n) {
     }
 }
 
-bint_t add(const bint_t& a, const bint_t& b) {
-    if (!a.sign && b.sign) return sub_abs(a, b);
-    if (a.sign && !b.sign) return sub_abs(b, a);
-    if (a.sign) { // => b.sign
-        auto result = add_abs(a, b);
-        result.sign = true;
-        return result;
-    }
-    return add_abs(a, b);
-}
-
-bint_t sub(const bint_t& a, const bint_t& b) {
-    if (!a.sign && b.sign) return add_abs(a, b);
-    if (a.sign && !b.sign) {
-        auto result = add_abs(a, b);
-        result.sign = true;
-        return result;
-    }
-    if (a.sign) return sub_abs(b, a);
-    return sub_abs(a, b);
-}
-
-bint_t multiply(const bint_t& a, const bint_t& b) {
-    if (a.data.size() < KARATSUBA_THRESHOLD || b.data.size() < KARATSUBA_THRESHOLD)
-        return slow_mul(a, b); // TODO check a.size == 1 || b.size == 1
-
-    if (a.data.size() < TOOM_COOK_THRESHOLD && b.data.size() < TOOM_COOK_THRESHOLD)
-        return karatsuba(a, b);
-
-    return toom3(a, b);
-}
-
-bint_t slow_mul(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
-    if (a_limit < 0) a_limit = a.data.size();
-    if (b_limit < 0) b_limit = b.data.size();
-    auto result = slow_mul_abs(a, b, a_limit, b_limit);
-    result.sign = a.sign ^ b.sign;
-    result.normalize();
-    return result;
-}
-
-std::strong_ordering compare(const bint_t& a, const bint_t& b) {
-    if (a.sign && !b.sign) return std::strong_ordering::less;
-    if (!a.sign && b.sign) return std::strong_ordering::greater;
-    const auto result = compare_abs(a, b);
-    return a.sign ? 0 <=> result : result;
-}
-
-void debug_print(const bint_t& a) {
-    std::cout << (a.sign ? "-" : "+") << "[";
+void big_int::shift_left_inplace(bint_t& a, const int shift) {
+    if (shift >= 64) throw std::runtime_error("shift_left_inplace: shift >= 64: " + std::to_string(shift));
+    if (shift == 0) return;
+    const uint64_t last = a.data.back() >> (64 - shift);
     for (int i = a.data.size() - 1; i >= 0; i--) {
-        std::cout << a.data[i];
-        if (i > 0) std::cout << ", ";
+        const uint64_t self = a.data[i] << shift;
+        const uint64_t next = i == 0 ? 0 : a.data[i - 1] >> (64 - shift);
+        a.data[i] = self | next;
     }
-    std::cout << "]" << std::endl;
+    if (last != 0) {
+        a.data.push_back(last);
+    }
+}
+
+void big_int::shift_right_inplace(bint_t& a, const int shift) {
+    if (shift >= 64) throw std::runtime_error("shift_right_inplace: shift >= 64: " + std::to_string(shift));
+    if (shift == 0) return;
+    for (int i = 0; i < a.data.size(); i++) {
+        const uint64_t self = a.data[i] >> shift;
+        const uint64_t prev = i == a.data.size() - 1 ? 0 : a.data[i + 1] << (64 - shift);
+        a.data[i] = self | prev;
+    }
+    if (a.data.size() > 1 && a.data.back() == 0) {
+        a.data.pop_back();
+    }
 }
