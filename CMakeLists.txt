@@ -14,9 +14,6 @@ add_library(big_int_lib
         big_int/toom_cook.cpp
         big_int/toom_cook.h)
 
-add_executable(fast_math main.cpp)
-target_link_libraries(fast_math big_int_lib)
-
 include(FetchContent)
 FetchContent_Declare(
         googletest
