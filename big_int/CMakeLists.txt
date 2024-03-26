@@ -9,3 +9,6 @@ add_library(big_int_lib SHARED
         src/toom_cook.cpp)
 
 target_include_directories(big_int_lib PUBLIC include)
+
+install(TARGETS big_int_lib DESTINATION lib)
+install(DIRECTORY include/big_int DESTINATION include FILES_MATCHING PATTERN "*.h")
