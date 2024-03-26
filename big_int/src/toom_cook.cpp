@@ -2,9 +2,8 @@
 // Created by Vyacheslav.Moklev on 24/03/2024.
 //
 
-#include "toom_cook.h"
-#include <iostream>
-#include "big_int_ops.h"
+#include "big_int/toom_cook.h"
+#include "big_int/big_int_ops.h"
 
 using namespace big_int;
 using namespace big_int_impl;

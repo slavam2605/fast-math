@@ -2,12 +2,9 @@
 // Created by Vyacheslav.Moklev on 09/03/2024.
 //
 
-#include "big_int_ops.h"
-
-#include <iostream>
-
-#include "karatsuba.h"
-#include "toom_cook.h"
+#include "big_int/big_int_ops.h"
+#include "big_int/karatsuba.h"
+#include "big_int/toom_cook.h"
 
 std::strong_ordering compare_abs(const bint_t&a, const bint_t& b) {
     if (a.data.size() < b.data.size()) return std::strong_ordering::less;

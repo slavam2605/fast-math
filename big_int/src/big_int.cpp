@@ -2,9 +2,8 @@
 // Created by Vyacheslav.Moklev on 09/03/2024.
 //
 
-#include "big_int.h"
-#include "big_int_ops.h"
-#include "karatsuba.h"
+#include "big_int/big_int.h"
+#include "big_int/big_int_ops.h"
 
 bint_t::bint_t() : sign(false) {}
 

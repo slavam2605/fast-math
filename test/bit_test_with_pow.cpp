@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "../big_int/big_int.h"
-#include "../big_int/big_int_ops.h"
+#include "big_int/big_int.h"
+#include "big_int/big_int_ops.h"
 
 std::pair<bint_t, bint_t> get_test_pow_values() {
     bint_t a(3ll);

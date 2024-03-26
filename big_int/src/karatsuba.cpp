@@ -2,9 +2,8 @@
 // Created by Vyacheslav.Moklev on 09/03/2024.
 //
 
-#include "karatsuba.h"
-#include <iostream>
-#include "big_int_ops.h"
+#include "big_int/karatsuba.h"
+#include "big_int/big_int_ops.h"
 
 using namespace big_int_impl;
 
