@@ -91,6 +91,6 @@ bint_t toom3(const bint_t& a, const bint_t& b) {
     add_abs_inplace(r_0, r3, -1, 3 * m);
     add_abs_inplace(r_0, r4, -1, 4 * m);
     r_0.sign = a.sign ^ b.sign;
-    r_0.normalize();
+    normalize(r_0);
     return r_0;
 }

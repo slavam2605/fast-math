@@ -7,6 +7,8 @@
 
 bint_t::bint_t() : sign(false) {}
 
+bint_t::bint_t(bint_t&& other) noexcept : sign(other.sign), data(std::move(other.data)) {}
+
 bint_t::bint_t(const uint64_t value) : sign(false) {
     data.push_back(value);
 }
@@ -15,13 +17,17 @@ bint_t::bint_t(const int64_t value) : sign(value < 0) {
     data.push_back(abs(value));
 }
 
-void bint_t::normalize() {
-    while (data.size() > 1 && data.back() == 0) {
-        data.pop_back();
-    }
-    if (data.empty() || data.size() == 1 && data[0] == 0) {
-        sign = false;
-    }
+bint_t::bint_t(const int value) : bint_t(static_cast<int64_t>(value)) {}
+
+bint_t& bint_t::pow(const int n) {
+    big_int::fast_pow_inplace(*this, n);
+    return *this;
+}
+
+bint_t bint_t::pow(int n) const {
+    auto result = *this;
+    result.pow(n);
+    return result;
 }
 
 std::strong_ordering bint_t::operator<=>(const bint_t& other) const {
@@ -30,6 +36,12 @@ std::strong_ordering bint_t::operator<=>(const bint_t& other) const {
 
 bool bint_t::operator==(const bint_t& other) const {
     return (*this <=> other) == 0;
+}
+
+bint_t bint_t::operator-() const {
+    auto result = *this;
+    result.sign = !result.sign;
+    return result;
 }
 
 bint_t bint_t::operator+(const bint_t& other) const {
@@ -46,12 +58,7 @@ bint_t bint_t::operator*(const bint_t& other) const {
 
 bint_t bint_t::operator/(const bint_t& other) const {
     bint_t a = *this;
-    bint_t rem;
-    big_int::div_abs_inplace(a, other, rem);
-    a.sign = this->sign ^ other.sign;
-    if (a.sign && rem != bint_t(0ll)) {
-        big_int_impl::add_abs_inplace(a, bint_t(1ll));
-    }
+    a /= other;
     return a;
 }
 
@@ -67,6 +74,58 @@ bint_t bint_t::operator%(const bint_t& other) const {
     }
     rem.sign = other.sign;
     return rem;
+}
+
+bint_t bint_t::operator<<(int n) const {
+    bint_t result = *this;
+    result <<= n;
+    return result;
+}
+
+bint_t bint_t::operator>>(int n) const {
+    bint_t result = *this;
+    result >>= n;
+    return result;
+}
+
+bint_t& bint_t::operator+=(const bint_t& other) {
+    return *this = *this + other;
+}
+
+bint_t& bint_t::operator-=(const bint_t& other) {
+    return *this = *this - other;
+}
+
+bint_t& bint_t::operator*=(const bint_t& other) {
+    return *this = *this * other;
+}
+
+bint_t& bint_t::operator/=(const bint_t& other) {
+    bint_t rem;
+    big_int::div_abs_inplace(*this, other, rem);
+    this->sign = this->sign ^ other.sign;
+    if (this->sign && rem != bint_t(0ll)) {
+        big_int_impl::add_abs_inplace(*this, bint_t(1ll));
+    }
+    return *this;
+}
+
+bint_t& bint_t::operator%=(const bint_t& other) {
+    bint_t rem;
+    big_int::div_abs_inplace(*this, other, rem);
+    if (rem == bint_t(0ll)) {
+        *this = bint_t(0);
+        return *this;
+    }
+
+    if (this->sign != other.sign) {
+        *this = other;
+        big_int_impl::sub_abs_inplace(*this, rem);
+    } else {
+        *this = rem;
+    }
+    this->sign = other.sign;
+    return *this;
 }
 
 bint_t& bint_t::operator<<=(const int n) {

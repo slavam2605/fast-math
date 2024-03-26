@@ -33,7 +33,7 @@ void sub_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c) {
     }
 
     if (carry > 0) throw std::runtime_error("sub_mul_abs_uint64: carry > 0");
-    a.normalize();
+    big_int_impl::normalize(a);
 }
 
 bint_t schoolbook_mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
@@ -117,8 +117,8 @@ void div_abs_inplace_inner(bint_t& a, const bint_t& b, bint_t& rem) {
             a.data[i]++;
         }
     }
-    a.normalize();
-    current.normalize();
+    big_int_impl::normalize(a);
+    big_int_impl::normalize(current);
     rem = current;
 }
 
@@ -174,7 +174,7 @@ void big_int_impl::sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit) {
         a.data[i] = c;
     }
     if (carry > 0) throw std::runtime_error("sub_abs_inplace: carry > 0");
-    a.normalize();
+    normalize(a);
 }
 
 /**
@@ -198,8 +198,17 @@ bint_t big_int_impl::schoolbook_multiply(const bint_t& a, const bint_t& b, int a
     if (b_limit < 0) b_limit = b.data.size();
     auto result = schoolbook_mul_abs(a, b, a_limit, b_limit);
     result.sign = a.sign ^ b.sign;
-    result.normalize();
+    normalize(result);
     return result;
+}
+
+void big_int_impl::normalize(bint_t& a) {
+    while (a.data.size() > 1 && a.data.back() == 0) {
+        a.data.pop_back();
+    }
+    if (a.data.empty() || a.data.size() == 1 && a.data[0] == 0) {
+        a.sign = false;
+    }
 }
 
 // ================ namespace big_int ================

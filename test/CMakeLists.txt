@@ -8,7 +8,8 @@ set(INSTALL_GMOCK OFF)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
-add_executable(big_int_tests bit_test_with_pow.cpp)
+add_executable(big_int_tests big_test_with_pow.cpp
+        simple_division_test.cpp)
 target_link_libraries(big_int_tests GTest::gtest_main big_int_lib)
 
 include(GoogleTest)
