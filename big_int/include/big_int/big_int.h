@@ -23,6 +23,7 @@ struct bint_t {
     [[nodiscard]] bint_t pow(int n) const;
 
     bint_t& operator=(const bint_t& other) = default;
+    bint_t& operator=(bint_t&& other) = default;
     std::strong_ordering operator<=>(const bint_t& other) const;
     bool operator==(const bint_t& other) const;
     bint_t operator-() const;
@@ -32,16 +33,16 @@ struct bint_t {
     bint_t operator*(const bint_t& other) const;
     bint_t operator/(const bint_t& other) const;
     bint_t operator%(const bint_t& other) const;
-    bint_t operator<<(int n) const;
-    bint_t operator>>(int n) const;
+    bint_t operator<<(int64_t n) const;
+    bint_t operator>>(int64_t n) const;
 
     bint_t& operator+=(const bint_t& other);
     bint_t& operator-=(const bint_t& other);
     bint_t& operator*=(const bint_t& other);
     bint_t& operator/=(const bint_t& other);
     bint_t& operator%=(const bint_t& other);
-    bint_t& operator<<=(int n);
-    bint_t& operator>>=(int n);
+    bint_t& operator<<=(int64_t n);
+    bint_t& operator>>=(int64_t n);
 
     [[nodiscard]] std::string to_string() const;
 };

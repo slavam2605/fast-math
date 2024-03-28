@@ -8,8 +8,7 @@ for faster operations.
 
 * Basic operations: addition, subtraction, shifting, comparison.
 * Fast multiplication with Karatsuba and Toom-Cook (Toom-3) algorithms, O(n<sup>log<sub>3</sub>5</sup>) ≈ O(n<sup>1.46</sup>) time complexity.
-* Division with Knuth's algorithm D ideas: still O(n<sup>2</sup>) time complexity, but faster than trivial implementation.
-* Fast power, using O(log n) multiplications.
+* Fast division with [Burnikel-Ziegler algorithm](https://pure.mpg.de/rest/items/item_1819444_4/component/file_2599480/content): O(n<sup>log<sub>3</sub>5</sup> log n) ≈ O(n<sup>1.46</sup> log n) time complexity with Toom-3 multiplication.
 * Fast divide-and-conquer `to_string` implementation
 
 ## Installation
@@ -34,8 +33,8 @@ An example of computing a factorial of 1000:
 #include <big_int/big_int.h>
 
 int main() {
-    bint_t factorial(1ll);
-    for (int64_t i = 2; i <= 1000; i++) {
+    bint_t factorial(1);
+    for (int i = 2; i <= 1000; i++) {
         factorial = factorial * bint_t(i);
     }
 

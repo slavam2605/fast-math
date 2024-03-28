@@ -30,14 +30,14 @@ bint_t karatsuba(const bint_t& a, const bint_t& b, int a_limit, int b_limit) { /
 
     auto z2 = karatsuba(a1, b1);
     auto z0 = karatsuba(a, b, a0_limit, b0_limit);
-    add_abs_inplace(a1, a, a0_limit);
-    add_abs_inplace(b1, b, b0_limit);
+    add_abs_inplace(a1, a, 0, a0_limit);
+    add_abs_inplace(b1, b, 0, b0_limit);
     auto z1 = karatsuba(a1, b1);
     sub_abs_inplace(z1, z2);
     sub_abs_inplace(z1, z0);
 
-    add_abs_inplace(z0, z1, -1, m);
-    add_abs_inplace(z0, z2, -1, 2 * m);
+    add_abs_inplace(z0, z1, 0, -1, m);
+    add_abs_inplace(z0, z2, 0, -1, 2 * m);
     z0.sign = a.sign ^ b.sign;
     normalize(z0);
 

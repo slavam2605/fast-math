@@ -8,27 +8,31 @@
 using namespace big_int;
 using namespace big_int_impl;
 
-std::tuple<bint_t, bint_t, bint_t> split_abs(const bint_t& a, int m) {
-    if (a.data.size() <= m) {
-        auto copy = a;
-        copy.sign = false;
+std::tuple<bint_t, bint_t, bint_t> split_abs_3way(const bint_t& a, const int a_limit, const int m) {
+    if (a_limit <= m) {
+        bint_t copy;
+        copy.data.resize(a_limit);
+        std::copy_n(a.data.begin(), a_limit, copy.data.begin());
         return std::make_tuple(bint_t(0ll), bint_t(0ll), copy);
     }
 
     bint_t low;
     low.data.resize(m);
     std::copy_n(a.data.begin(), m, low.data.begin());
+    normalize(low);
 
     bint_t mid;
-    mid.data.resize(std::min(m, static_cast<int>(a.data.size()) - m));
+    mid.data.resize(std::min(m, a_limit - m));
     std::copy_n(a.data.begin() + m, mid.data.size(), mid.data.begin());
+    normalize(mid);
 
-    if (a.data.size() <= 2 * m)
+    if (a_limit <= 2 * m)
         return std::make_tuple(bint_t(0ll), mid, low);
 
     bint_t high;
-    high.data.resize(std::min(m, static_cast<int>(a.data.size()) - 2 * m));
+    high.data.resize(std::min(m, a_limit - 2 * m));
     std::copy_n(a.data.begin() + 2 * m, high.data.size(), high.data.begin());
+    normalize(high);
 
     return std::make_tuple(high, mid, low);
 }
@@ -47,10 +51,13 @@ void div_abs_inplace_3_assert_rem(bint_t& a) {
         std::to_string(static_cast<uint64_t>(current)) + ", a = " + a.to_string());
 }
 
-bint_t toom3(const bint_t& a, const bint_t& b) {
-    int m = (std::max(a.data.size(), b.data.size()) + 2) / 3;
-    auto [a2, a1, a0] = split_abs(a, m);
-    auto [b2, b1, b0] = split_abs(b, m);
+bint_t toom3(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
+    if (a_limit < 0) a_limit = a.data.size();
+    if (b_limit < 0) b_limit = b.data.size();
+
+    int m = (std::max(a_limit, b_limit) + 2) / 3;
+    auto [a2, a1, a0] = split_abs_3way(a, a_limit, m);
+    auto [b2, b1, b0] = split_abs_3way(b, b_limit, m);
 
     auto p0 = a0 + a2;
     auto p_1 = p0 + a1;
@@ -86,10 +93,10 @@ bint_t toom3(const bint_t& a, const bint_t& b) {
     r2 = r2 + r1 - r4;
     r1 = r1 - r3;
 
-    add_abs_inplace(r_0, r1, -1, m);
-    add_abs_inplace(r_0, r2, -1, 2 * m);
-    add_abs_inplace(r_0, r3, -1, 3 * m);
-    add_abs_inplace(r_0, r4, -1, 4 * m);
+    add_abs_inplace(r_0, r1, 0, -1, m);
+    add_abs_inplace(r_0, r2, 0, -1, 2 * m);
+    add_abs_inplace(r_0, r3, 0, -1, 3 * m);
+    add_abs_inplace(r_0, r4, 0, -1, 4 * m);
     r_0.sign = a.sign ^ b.sign;
     normalize(r_0);
     return r_0;

@@ -65,7 +65,7 @@ bint_t bint_t::operator/(const bint_t& other) const {
 bint_t bint_t::operator%(const bint_t& other) const {
     bint_t a = *this;
     bint_t rem;
-    big_int::div_abs_inplace(a, other, rem);
+    big_int::divide_abs(a, other, rem);
     if (rem == bint_t(0ll)) return rem;
     if (this->sign != other.sign) {
         const bint_t r = rem;
@@ -76,13 +76,13 @@ bint_t bint_t::operator%(const bint_t& other) const {
     return rem;
 }
 
-bint_t bint_t::operator<<(int n) const {
+bint_t bint_t::operator<<(const int64_t n) const {
     bint_t result = *this;
     result <<= n;
     return result;
 }
 
-bint_t bint_t::operator>>(int n) const {
+bint_t bint_t::operator>>(const int64_t n) const {
     bint_t result = *this;
     result >>= n;
     return result;
@@ -102,7 +102,7 @@ bint_t& bint_t::operator*=(const bint_t& other) {
 
 bint_t& bint_t::operator/=(const bint_t& other) {
     bint_t rem;
-    big_int::div_abs_inplace(*this, other, rem);
+    big_int::divide_abs(*this, other, rem);
     this->sign = this->sign ^ other.sign;
     if (this->sign && rem != bint_t(0ll)) {
         big_int_impl::add_abs_inplace(*this, bint_t(1ll));
@@ -112,7 +112,7 @@ bint_t& bint_t::operator/=(const bint_t& other) {
 
 bint_t& bint_t::operator%=(const bint_t& other) {
     bint_t rem;
-    big_int::div_abs_inplace(*this, other, rem);
+    big_int::divide_abs(*this, other, rem);
     if (rem == bint_t(0ll)) {
         *this = bint_t(0);
         return *this;
@@ -128,12 +128,12 @@ bint_t& bint_t::operator%=(const bint_t& other) {
     return *this;
 }
 
-bint_t& bint_t::operator<<=(const int n) {
+bint_t& bint_t::operator<<=(const int64_t n) {
     big_int::shift_left_inplace(*this, n);
     return *this;
 }
 
-bint_t& bint_t::operator>>=(int n) {
+bint_t& bint_t::operator>>=(const int64_t n) {
     big_int::shift_right_inplace(*this, n);
     return *this;
 }
@@ -159,7 +159,7 @@ void small_to_string(const bint_t& a, std::string& buffer, int digits) {
     if (digits > 0) {
         if (result.size() > digits) {
             throw std::runtime_error("small_to_string: result.size()[" + std::to_string(result.size()) +
-                "] > digits[" + std::to_string(digits) + "]");
+                "] > digits[" + std::to_string(digits) + "]: " + result);
         }
         for (int i = 0; i < digits - result.size(); i++) {
             buffer.push_back('0');
@@ -179,7 +179,8 @@ void to_string(const bint_t& a, std::string& buffer, int digits) { // NOLINT(*-n
 
     bint_t high = a;
     bint_t low;
-    big_int::div_abs_inplace(high, big10, low);
+    big_int_impl::normalize(high);
+    big_int::divide_abs(high, big10, low);
     to_string(high, buffer, digits - half_length10);
     to_string(low, buffer, half_length10);
 }

@@ -7,6 +7,8 @@ add_library(big_int_lib SHARED
         src/karatsuba.cpp
         include/big_int/toom_cook.h
         src/toom_cook.cpp
+        src/burnikel_ziegler.cpp
+        include/big_int/burnikel_ziegler.h
 )
 
 target_include_directories(big_int_lib PUBLIC
