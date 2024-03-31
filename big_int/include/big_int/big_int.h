@@ -45,6 +45,14 @@ struct bint_t {
     bint_t& operator>>=(int64_t n);
 
     [[nodiscard]] std::string to_string() const;
+    [[nodiscard]] std::string to_string_old() const;
+
+private:
+    static constexpr int TO_STRING_THRESHOLD = 20;
+    static std::vector<bint_t> power10_conversion_cache;
+
+    static const bint_t& compute_power10_with_cache(int n);
+    static void to_string(const bint_t& a, std::string& buffer, int digits);
 };
 
 #endif //BIG_INT_H

@@ -308,6 +308,14 @@ bint_t big_int_impl::schoolbook_multiply(const bint_t& a, const bint_t& b, int a
     return result;
 }
 
+uint64_t big_int_impl::count_bits(const bint_t& a) {
+    if (a.data.size() > 1 && a.data.back() == 0) {
+        throw std::runtime_error("count_bits: value is not normalized");
+    }
+
+    return a.data.size() * 64 - std::countl_zero(a.data.back());
+}
+
 void big_int_impl::normalize(bint_t& a) {
     while (a.data.size() > 1 && a.data.back() == 0) {
         a.data.pop_back();

@@ -5,14 +5,6 @@
 #include <big_int/burnikel_ziegler.h>
 #include <big_int/big_int_ops.h>
 
-uint64_t count_bits(const bint_t& a) {
-    if (a.data.size() > 1 && a.data.back() == 0) {
-        throw std::runtime_error("count_bits: value is not normalized");
-    }
-
-    return a.data.size() * 64 - std::countl_zero(a.data.back());
-}
-
 bint_t get_chunk(const bint_t& a, const int chunk_size, const int chunk_index) {
     bint_t result;
     const int leftover_size = static_cast<int>(a.data.size()) - chunk_index * chunk_size;
@@ -99,12 +91,12 @@ void divide_burnikel_ziegler(bint_t& a, const bint_t& b, bint_t& rem) {
     const int64_t n64 = 64ll * n;
 
     // amount of bits to shift `a` and `b` left
-    const int sigma = static_cast<int>(n64 - count_bits(b));
+    const int sigma = static_cast<int>(n64 - big_int_impl::count_bits(b));
     const bint_t new_b = b << sigma;
     a <<= sigma;
 
     // amount of blocks to split `a` into, but at least 2
-    const int t = std::max(2, static_cast<int>((count_bits(a) + n64) / n64));
+    const int t = std::max(2, static_cast<int>((big_int_impl::count_bits(a) + n64) / n64));
 
     bint_t result(0ll);
     auto z = get_chunk(a, n, t - 2);

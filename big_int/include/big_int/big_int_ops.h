@@ -34,6 +34,7 @@ namespace big_int_impl {
     void add_abs_inplace(bint_t& a, const bint_t& b, int b_start = 0, int b_limit = -1, int b_shift = 0);
     void sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit = -1);
     void div_abs_inplace(bint_t& a, uint64_t b, uint64_t& rem);
+    uint64_t count_bits(const bint_t& a);
     void normalize(bint_t& a);
 }
 

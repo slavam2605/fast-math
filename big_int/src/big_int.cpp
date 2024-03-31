@@ -5,6 +5,8 @@
 #include "big_int/big_int.h"
 #include "big_int/big_int_ops.h"
 
+std::vector<bint_t> bint_t::power10_conversion_cache = {bint_t(10)};
+
 bint_t::bint_t() : sign(false) {}
 
 bint_t::bint_t(bint_t&& other) noexcept : sign(other.sign), data(std::move(other.data)) {}
@@ -143,51 +145,70 @@ bint_t& bint_t::operator>>=(const int64_t n) {
     return *this;
 }
 
-void small_to_string(const bint_t& a, std::string& buffer, int digits) {
-    std::string result;
+void small_to_string(const bint_t& a, std::string& buffer, const int digits) {
+    std::vector<uint64_t> groups;
     bint_t current = a;
     uint64_t rem;
-    if (current.data.empty() || current.data.size() == 1 && current.data[0] == 0ull) { // if current == 0
-        result.push_back('0');
-    }
+
+    groups.reserve(std::ceil(static_cast<double>(current.data.size()) * 64 / std::log2(10) / 19));
     while (current.data.size() > 1 || (!current.data.empty() && current.data[0] != 0ull)) { // while current != 0
         constexpr uint64_t divisor = 10000000000000000000ull;
         big_int_impl::div_abs_inplace(current, divisor, rem);
-        for (int _ = 0; _ < 19; _++) {
-            result.push_back("0123456789"[rem % 10]);
-            rem /= 10;
-        }
+        groups.push_back(rem);
     }
-    while (result.size() > 1 && result.back() == '0') {
-        result.pop_back();
-    }
+
+    constexpr int digits_per_group = 19;
     if (digits > 0) {
-        if (result.size() > digits) {
-            throw std::runtime_error("small_to_string: result.size()[" + std::to_string(result.size()) +
-                "] > digits[" + std::to_string(digits) + "]: " + result);
+        const auto& last_group = std::to_string(groups.back());
+        const int total_digits = (groups.size() - 1) * digits_per_group + last_group.length();
+        if (total_digits > digits) {
+            throw std::runtime_error("small_to_string: result.size()[" + std::to_string(total_digits) +
+                "] > digits[" + std::to_string(digits) + "]");
         }
-        for (int i = 0; i < digits - result.size(); i++) {
-            buffer.push_back('0');
-        }
+        buffer.append(digits - total_digits, '0');
+        buffer.append(last_group);
+    } else {
+        buffer.append(std::to_string(groups.back()));
     }
-    std::ranges::reverse(result);
-    buffer.append(result);
+
+    for (int i = groups.size() - 2; i >= 0; i--) {
+        auto sgroup = std::to_string(groups[i]);
+        buffer.append(digits_per_group - sgroup.length(), '0');
+        buffer.append(sgroup);
+    }
 }
 
-void to_string(const bint_t& a, std::string& buffer, int digits) { // NOLINT(*-no-recursion)
-    if (a.data.size() < 10)
+const bint_t& bint_t::compute_power10_with_cache(const int n) {
+    if (n < power10_conversion_cache.size())
+        return power10_conversion_cache[n];
+
+    const int old_size = power10_conversion_cache.size();
+    power10_conversion_cache.resize(n + 1);
+    for (int i = old_size; i <= n; i++) {
+        bint_t next_value = power10_conversion_cache[i - 1];
+        next_value *= next_value;
+        power10_conversion_cache[i] = next_value;
+    }
+    return power10_conversion_cache[n];
+}
+
+void bint_t::to_string(const bint_t& a, std::string& buffer, const int digits) { // NOLINT(*-no-recursion)
+    if (a.data.size() < TO_STRING_THRESHOLD)
         return small_to_string(a, buffer, digits);
 
-    const int half_length10 = static_cast<int>(a.data.size() * 32 / std::log2(10.0));
-    bint_t big10(10ll);
-    big_int::fast_pow_inplace(big10, half_length10);
+    // Compute n, such as 10^(2^(n + 1)) is approximately a
+    const int n = static_cast<int>(std::round(
+        std::log2(static_cast<double>(big_int_impl::count_bits(a)) / std::log2(10)) - 1
+    ));
+    const int expected_digits = 1 << n;
+    const bint_t& big10 = compute_power10_with_cache(n);
 
     bint_t high = a;
     bint_t low;
     big_int_impl::normalize(high);
     big_int::divide_abs(high, big10, low);
-    to_string(high, buffer, digits - half_length10);
-    to_string(low, buffer, half_length10);
+    to_string(high, buffer, digits - expected_digits);
+    to_string(low, buffer, expected_digits);
 }
 
 std::string bint_t::to_string() const {
@@ -196,7 +217,7 @@ std::string bint_t::to_string() const {
     result.reserve(expected_length + (this->sign ? 1 : 0));
 
     if (this->sign) result.push_back('-');
-    ::to_string(*this, result, 0);
+    to_string(*this, result, 0);
     return result;
 }
 
