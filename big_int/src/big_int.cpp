@@ -97,6 +97,11 @@ bint_t& bint_t::operator-=(const bint_t& other) {
 }
 
 bint_t& bint_t::operator*=(const bint_t& other) {
+    if (this == &other) {
+        big_int_impl::square(*this);
+        return *this;
+    }
+
     return *this = *this * other;
 }
 

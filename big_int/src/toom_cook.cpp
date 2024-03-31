@@ -37,6 +37,28 @@ std::tuple<bint_t, bint_t, bint_t> split_abs_3way(const bint_t& a, const int a_l
     return std::make_tuple(high, mid, low);
 }
 
+std::pair<bint_t, bint_t> split_abs_3way_inplace(bint_t& a, const int a_limit, const int m) {
+    if (a_limit <= 2 * m) {
+        throw std::runtime_error("split_abs_3way_inplace: a_limit [" + std::to_string(a_limit) +
+            "] <= 2 * m [" + std::to_string(2 * m) + "]");
+    }
+
+    bint_t mid;
+    mid.data.resize(std::min(m, a_limit - m));
+    std::copy_n(a.data.begin() + m, mid.data.size(), mid.data.begin());
+    normalize(mid);
+
+    bint_t high;
+    high.data.resize(std::min(m, a_limit - 2 * m));
+    std::copy_n(a.data.begin() + 2 * m, high.data.size(), high.data.begin());
+    normalize(high);
+
+    a.sign = false;
+    a.data.resize(m);
+    normalize(a);
+    return std::make_pair(high, mid);
+}
+
 void div_abs_inplace_3_assert_rem(bint_t& a) {
     __uint128_t current = 0;
     for (int i = a.data.size() - 1; i >= 0; i--) {
@@ -100,4 +122,44 @@ bint_t toom3(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     r_0.sign = a.sign ^ b.sign;
     normalize(r_0);
     return r_0;
+}
+
+void toom3_square(bint_t& a, int a_limit) {
+    if (a_limit < 0) a_limit = a.data.size();
+
+    const int m = (a_limit + 2) / 3;
+    auto [a2, a1] = split_abs_3way_inplace(a, a_limit, m);
+
+    const auto p0 = a + a2;
+    auto p_1 = p0 + a1;
+    auto p_m1 = p0 - a1;
+    auto p_m2 = p_m1 + a2;
+    p_m2 <<= 1;
+    p_m2 = p_m2 - a;
+
+    square(a);
+    square(p_1);
+    square(p_m1);
+    square(p_m2);
+    square(a2);
+
+    const auto r4 = a2;
+    auto r3 = p_m2 - p_1;
+    div_abs_inplace_3_assert_rem(r3);
+    auto r1 = p_1 - p_m1;
+    r1 >>= 1;
+    auto r2 = p_m1 - a;
+    auto diff = r2 - r3;
+    r3 = r2 - r3;
+    r3 >>= 1;
+    a2 <<= 1;
+    r3 = r3 + a2;
+    r2 = r2 + r1 - r4;
+    r1 = r1 - r3;
+
+    add_abs_inplace(a, r1, 0, -1, m);
+    add_abs_inplace(a, r2, 0, -1, 2 * m);
+    add_abs_inplace(a, r3, 0, -1, 3 * m);
+    add_abs_inplace(a, r4, 0, -1, 4 * m);
+    normalize(a); // a.sign is already false from split_abs_3way_inplace
 }

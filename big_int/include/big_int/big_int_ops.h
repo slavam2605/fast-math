@@ -8,8 +8,10 @@
 #include "big_int.h"
 
 namespace big_int {
-    constexpr int KARATSUBA_THRESHOLD = 30;
-    constexpr int TOOM_COOK_THRESHOLD = 100;
+    constexpr int KARATSUBA_THRESHOLD = 50;
+    constexpr int KARATSUBA_SQUARE_THRESHOLD = 50;
+    constexpr int TOOM_COOK_THRESHOLD = 220;
+    constexpr int TOOM_COOK_SQUARE_THRESHOLD = 220;
 
     bint_t add(const bint_t& a, const bint_t& b);
     bint_t sub(const bint_t& a, const bint_t& b);
@@ -25,6 +27,8 @@ namespace big_int {
 }
 
 namespace big_int_impl {
+    void square(bint_t& a, int a_limit = -1);
+    bint_t schoolbook_square(const bint_t& a, int a_limit);
     bint_t schoolbook_multiply(const bint_t& a, const bint_t& b, int a_limit = -1, int b_limit = -1);
     std::strong_ordering compare_abs(const bint_t&a, const bint_t& b, int shift = 0);
     void add_abs_inplace(bint_t& a, const bint_t& b, int b_start = 0, int b_limit = -1, int b_shift = 0);

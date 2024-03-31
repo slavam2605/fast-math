@@ -10,5 +10,6 @@
 // extern int SPLIT_LIMIT;
 
 bint_t karatsuba(const bint_t& a, const bint_t& b, int a_limit = -1, int b_limit = -1);
+void karatsuba_square(bint_t& a, int a_limit = -1);
 
 #endif //KATATSUBA_H

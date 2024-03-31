@@ -28,6 +28,34 @@ void sub_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c) {
     big_int_impl::normalize(a);
 }
 
+/**
+ * Fast implementation for `a = a + ((b[b_start..b.size-1] * c) << (64 * left_shift))`
+ */
+void add_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c, const int b_start, const int left_shift) {
+    if (c == 0) return; // a + 0 == a
+    if (left_shift > a.data.size()) throw std::runtime_error("add_mul_abs_uint64: left_shift > a.data.size()");
+
+    const __uint128_t factor = c;
+    uint64_t carry = 0;
+    for (int i = left_shift; i < a.data.size() || i < b.data.size() + left_shift - b_start; i++) {
+        __uint128_t _mc = a.data[i];
+        _mc += carry;
+        if (i - left_shift + b_start < b.data.size()) {
+            _mc += factor * b.data[i - left_shift + b_start];
+        }
+        carry = static_cast<uint64_t>(_mc >> 64);
+        if (i < a.data.size()) {
+            a.data[i] = static_cast<uint64_t>(_mc);
+        } else {
+            a.data.push_back(static_cast<uint64_t>(_mc));
+        }
+    }
+
+    if (carry > 0) {
+        a.data.push_back(carry);
+    }
+}
+
 bint_t schoolbook_mul_abs(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     bint_t result(0ull);
     for (int i = 0; i < b_limit; i++) {
@@ -185,6 +213,31 @@ void shift_right_inplace_in_block(bint_t& a, const int shift) {
 
 // ================ namespace big_int_impl ================
 
+bint_t big_int_impl::schoolbook_square(const bint_t& a, int a_limit) {
+    if (a_limit < 0) a_limit = a.data.size();
+
+    bint_t result(0);
+    result.data.resize(2 * a_limit);
+
+    uint64_t last_low_word = 0;
+    for (int i = a_limit - 1; i >= 0; i--) {
+        __uint128_t c = a.data[i];
+        c *= c;
+        result.data[2 * i] = static_cast<uint64_t>(c >> 1);
+        result.data[2 * i + 1] = last_low_word << 63 | static_cast<uint64_t>(c >> 65);
+        last_low_word = static_cast<uint64_t>(c);
+    }
+
+    for (int i = 1; i < a_limit; i++) {
+        add_mul_abs_uint64(result, a, a.data[a_limit - i - 1], a_limit - i, (a_limit - i) * 2 - 1);
+    }
+
+    result <<= 1;
+    result.data[0] |= a.data[0] & 1;
+    normalize(result);
+    return result;
+}
+
 std::strong_ordering big_int_impl::compare_abs(const bint_t&a, const bint_t& b, const int shift) {
     if (a.data.size() < b.data.size() + shift) return std::strong_ordering::less;
     if (a.data.size() > b.data.size() + shift) return std::strong_ordering::greater;
@@ -199,7 +252,7 @@ std::strong_ordering big_int_impl::compare_abs(const bint_t&a, const bint_t& b, 
 void big_int_impl::add_abs_inplace(bint_t& a, const bint_t& b, const int b_start, int b_limit, const int b_shift) {
     if (b_limit < 0) b_limit = b.data.size();
     uint64_t carry = 0;
-    for (int i = 0; i < a.data.size() || i - b_shift < b_limit - b_start; i++) {
+    for (int i = std::min<int>(b_shift, a.data.size()); i < a.data.size() || i - b_shift < b_limit - b_start; i++) {
         uint64_t c = carry;
         carry = 0;
         if (i < a.data.size()) carry |= __builtin_uaddll_overflow(a.data[i], c, &c);
@@ -264,6 +317,22 @@ void big_int_impl::normalize(bint_t& a) {
     }
 }
 
+void big_int_impl::square(bint_t& a, int a_limit) {
+    if (a_limit < 0) a_limit = a.data.size();
+
+    if (a_limit < big_int::KARATSUBA_SQUARE_THRESHOLD) {
+        a = schoolbook_square(a, a_limit);
+        return;
+    }
+
+    if (a_limit < big_int::TOOM_COOK_SQUARE_THRESHOLD) {
+        karatsuba_square(a, a_limit);
+        return;
+    }
+
+    toom3_square(a, a_limit);
+}
+
 // ================ namespace big_int ================
 
 bint_t big_int::add(const bint_t& a, const bint_t& b) {
@@ -293,6 +362,13 @@ bint_t big_int::sub(const bint_t& a, const bint_t& b) {
 bint_t big_int::multiply(const bint_t& a, const bint_t& b, int a_limit, int b_limit) {
     if (a_limit < 0) a_limit = a.data.size();
     if (b_limit < 0) b_limit = b.data.size();
+
+    // Check if possible to calculate a square instead
+    if (&a == &b && a_limit == b_limit) {
+        auto result = a;
+        big_int_impl::square(result, a_limit);
+        return result;
+    }
 
     if (a_limit < KARATSUBA_THRESHOLD || b_limit < KARATSUBA_THRESHOLD) {
         if (a_limit == 1)
@@ -352,7 +428,7 @@ void big_int::fast_pow_inplace(bint_t& a, uint64_t n) {
     // n is power of 2
     if ((n & (n - 1)) == 0) {
         while (n > 1) {
-            a = multiply(a, a);
+            a *= a;
             n >>= 1;
         }
         return;
@@ -361,9 +437,9 @@ void big_int::fast_pow_inplace(bint_t& a, uint64_t n) {
     n--;
     bint_t c = a;
     while (n > 0) {
-        if (n % 2 == 1) a = multiply(a, c);
+        if (n % 2 == 1) a *= c;
         n /= 2;
-        c = multiply(c, c);
+        c *= c;
     }
 }
 
