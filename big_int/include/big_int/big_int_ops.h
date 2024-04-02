@@ -31,11 +31,12 @@ namespace big_int_impl {
     bint_t schoolbook_square(const bint_t& a, int a_limit);
     bint_t schoolbook_multiply(const bint_t& a, const bint_t& b, int a_limit = -1, int b_limit = -1);
     std::strong_ordering compare_abs(const bint_t&a, const bint_t& b, int shift = 0);
-    void add_abs_inplace(bint_t& a, const bint_t& b, int b_start = 0, int b_limit = -1, int b_shift = 0);
+    void add_abs_inplace(bint_t& a, const bint_t& b, int b_start = 0, int b_limit = -1, int b_shift = 0, bool let_overflow = false);
     void sub_abs_inplace(bint_t& a, const bint_t& b, int b_limit = -1);
     void div_abs_inplace(bint_t& a, uint64_t b, uint64_t& rem);
     uint64_t count_bits(const bint_t& a);
     void normalize(bint_t& a);
+    bool is_normalized(const bint_t& a);
 }
 
 #endif //BIG_INT_OPS_H

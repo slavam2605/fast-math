@@ -9,23 +9,25 @@
 #include "big_int/toom_cook.h"
 
 /**
- * Fast implementation for `a = a - b * c`
+ * Fast implementation for `a = a - (b * c << offset * 64)`, optimized for Knuth's division.
+ * Does not normalize output intentionally.
  */
-void sub_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c) {
-    if (c == 0) return; // a - 0 == a
+uint64_t sub_mul_abs_uint64(bint_t& a, const bint_t& b, const uint64_t c, const int offset) {
+    if (offset > a.data.size()) throw std::runtime_error("sub_mul_abs_uint64_special: offset > a.data.size()");
+    if (c == 0) return 0; // a - 0 == a
 
     const __uint128_t factor = c;
     uint64_t carry = 0;
-    for (int i = 0; i < a.data.size() || i < b.data.size(); i++) {
+    for (int i = offset; i < a.data.size() || i - offset < b.data.size(); i++) {
         __uint128_t _mc = a.data[i];
         _mc -= carry;
-        if (i < b.data.size()) _mc -= factor * b.data[i];
+        if (i - offset < b.data.size()) _mc -= factor * b.data[i - offset];
         carry = -static_cast<uint64_t>(_mc >> 64);
         a.data[i] = static_cast<uint64_t>(_mc);
     }
 
-    if (carry > 0) throw std::runtime_error("sub_mul_abs_uint64: carry > 0");
-    big_int_impl::normalize(a);
+    // Don't normalize `a` -- this is intentional
+    return carry;
 }
 
 /**
@@ -102,47 +104,50 @@ bint_t mul_uint64(const bint_t& a, const uint64_t b, int a_limit, const bool new
     return result;
 }
 
+/**
+ * Knuth's algorithm D for the long division.
+ * Implementation is inspired by https://skanthak.hier-im-netz.de/division.html
+ */
 void divide_knuth_abs_inner(bint_t& a, const bint_t& b, bint_t& rem) {
-    if (big_int_impl::compare_abs(a, b) < 0) {
-        rem = a;
-        a = bint_t(0ll);
-        return;
-    }
-
     if (a.data.back() == 0) throw std::runtime_error("divide_knuth_abs_inner: leading zeroes in divident");
     if (b.data.back() == 0) throw std::runtime_error("divide_knuth_abs_inner: leading zeroes in divisor");
-    bint_t current;
-    for (int i = a.data.size() - 1; i >= 0; i--) {
-        current.data.insert(current.data.begin(), a.data[i]);
-        if (big_int_impl::compare_abs(current, b) < 0) {
-            a.data[i] = 0ull;
-            continue;
+
+    const int m = a.data.size();
+    const int n = b.data.size();
+
+    // Keep `a` unnormalized and normalize only in the end, this is important
+    a.data.push_back(0);
+    bint_t result;
+
+    for (int i = m - n; i >= 0; i--) {
+        const __uint128_t a_part = (static_cast<__uint128_t>(a.data[i + n]) << 64) + a.data[i + n - 1];
+        __uint128_t qhat = a_part / b.data[n - 1];
+        __uint128_t rhat = a_part % b.data[n - 1];
+
+        while (qhat >> 64 != 0 || static_cast<uint64_t>(qhat) * static_cast<__uint128_t>(b.data[n - 2]) > (rhat << 64) + a.data[i + n - 2]) {
+            qhat--;
+            rhat += b.data[n - 1];
+            if (rhat >> 64 != 0) break;
         }
 
-        // Guess the bounds
-        uint64_t left;
-        uint64_t right;
-        if (b.data.size() < current.data.size()) {
-            const __uint128_t current_part = (static_cast<__uint128_t>(current.data.back()) << 64) + current.data[current.data.size() - 2];
-            left = current_part / (b.data.back() + 1);
-            right = (current_part + 1) / b.data.back();
-        } else {
-            left = current.data.back() / (b.data.back() + 1);
-            right = (current.data.back() + 1) / b.data.back();
+        if (qhat >> 64 != 0) throw std::runtime_error("divide_knuth_abs_inner: qhat >= 2^64");
+        if (sub_mul_abs_uint64(a, b, qhat, i) != 0) {
+            qhat--;
+            big_int_impl::add_abs_inplace(a, b, 0, -1, i, true);
         }
+        result.data.push_back(qhat);
 
-        if (right - left > 2) throw std::runtime_error("right - left > 2: " + std::to_string(right - left));
-        sub_mul_abs_uint64(current, b, left);
-        a.data[i] = left;
-        for (int diff = 0; diff <= right - left; diff++) {
-            if (diff == right - left || big_int_impl::compare_abs(current, b) < 0) break;
-            big_int_impl::sub_abs_inplace(current, b);
-            a.data[i]++;
-        }
+        // Remove last digit of `a`: it is always 0
+        if (a.data.back() != 0) throw std::runtime_error("divide_knuth_abs_inner: a.data.back() != 0 after division step");
+        a.data.pop_back();
     }
+
+    rem = a;
+    big_int_impl::normalize(rem);
+
+    a.data.resize(result.data.size());
+    std::copy(result.data.rbegin(), result.data.rend(), a.data.begin());
     big_int_impl::normalize(a);
-    big_int_impl::normalize(current);
-    rem = current;
 }
 
 bint_t add_abs(const bint_t& a, const bint_t& b) {
@@ -239,17 +244,22 @@ bint_t big_int_impl::schoolbook_square(const bint_t& a, int a_limit) {
 }
 
 std::strong_ordering big_int_impl::compare_abs(const bint_t&a, const bint_t& b, const int shift) {
+    if (!is_normalized(a)) throw std::runtime_error("compare_abs: a is not normalized");
+    if (!is_normalized(b)) throw std::runtime_error("compare_abs: b is not normalized");
+
     if (a.data.size() < b.data.size() + shift) return std::strong_ordering::less;
     if (a.data.size() > b.data.size() + shift) return std::strong_ordering::greater;
+
     for (int i = a.data.size() - 1; i >= 0; i--) {
-        auto b_value = i >= shift ? b.data[i - shift] : 0;
+        const auto b_value = i >= shift ? b.data[i - shift] : 0;
         if (a.data[i] < b_value) return std::strong_ordering::less;
         if (a.data[i] > b_value) return std::strong_ordering::greater;
     }
+
     return std::strong_ordering::equal;
 }
 
-void big_int_impl::add_abs_inplace(bint_t& a, const bint_t& b, const int b_start, int b_limit, const int b_shift) {
+void big_int_impl::add_abs_inplace(bint_t& a, const bint_t& b, const int b_start, int b_limit, const int b_shift, const bool let_overflow) {
     if (b_limit < 0) b_limit = b.data.size();
     uint64_t carry = 0;
     for (int i = std::min<int>(b_shift, a.data.size()); i < a.data.size() || i - b_shift < b_limit - b_start; i++) {
@@ -263,7 +273,7 @@ void big_int_impl::add_abs_inplace(bint_t& a, const bint_t& b, const int b_start
             a.data.push_back(c);
         }
     }
-    if (carry > 0) {
+    if (!let_overflow && carry > 0) {
         a.data.push_back(carry);
     }
 }
@@ -323,6 +333,10 @@ void big_int_impl::normalize(bint_t& a) {
     if (a.data.empty() || a.data.size() == 1 && a.data[0] == 0) {
         a.sign = false;
     }
+}
+
+bool big_int_impl::is_normalized(const bint_t& a) {
+    return a.data.size() == 1 || !a.data.empty() && a.data.back() > 0;
 }
 
 void big_int_impl::square(bint_t& a, int a_limit) {
@@ -402,10 +416,16 @@ void big_int::divide_abs(bint_t& a, const bint_t& b, bint_t& rem) {
 }
 
 /**
- * Knuth's idea to shift left until highest digit of divisor is greater than 2^63
+ * Preparation for the Knuth's algorithm D: shift left until the highest digit of the divisor is at least 2^63
  */
 void big_int::divide_knuth_abs(bint_t& a, const bint_t& b, bint_t& rem) {
-    if (b.data.back() > 1ull << 63) {
+    if (big_int_impl::compare_abs(a, b) < 0) {
+        rem = a;
+        a = bint_t(0ll);
+        return;
+    }
+
+    if (b.data.back() >= 1ull << 63) {
         return divide_knuth_abs_inner(a, b, rem);
     }
 
@@ -453,9 +473,8 @@ void big_int::fast_pow_inplace(bint_t& a, uint64_t n) {
 
 void big_int::shift_left_inplace(bint_t& a, const int64_t shift) { // NOLINT(*-no-recursion)
     if (shift == 0) return;
-    if (shift < 0) {
-        return shift_right_inplace(a, -shift);
-    }
+    if (shift < 0) return shift_right_inplace(a, -shift);
+    if (a.data.size() == 1 && a.data.back() == 0) return; // 0 << shift == 0
 
     const int shift_blocks = shift / 64;
     const int shift_in_block = shift % 64;
